@@ -5,6 +5,10 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <WiFi.h>
+#include <esp_wpa2.h>
+#include <esp_wifi.h>
+#include <HTTPClient.h>
+#include <Arduino_JSON.h>
 
 
 // BME280 variables
@@ -16,15 +20,66 @@ Adafruit_BME280 bme; // I2C
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 
+// Button variable
+
 // LED variables
 #define LED_PIN_R 2
 #define LED_PIN_G 15
 
+// wifi setup
+const char *ssid = "eduroam"; // Eduroam // MWireless seized all 2.4GHz SSID on 2/25/2020
+#define EAP_IDENTITY "username@umich.edu" //enter full umich email address
+#define EAP_PASSWORD "umich_password"     //your umich password
+
+static const char incommon_ca[] PROGMEM = R"EOF(
+-----BEGIN CERTIFICATE-----
+MIIF+TCCA+GgAwIBAgIQRyDQ+oVGGn4XoWQCkYRjdDANBgkqhkiG9w0BAQwFADCB
+iDELMAkGA1UEBhMCVVMxEzARBgNVBAgTCk5ldyBKZXJzZXkxFDASBgNVBAcTC0pl
+cnNleSBDaXR5MR4wHAYDVQQKExVUaGUgVVNFUlRSVVNUIE5ldHdvcmsxLjAsBgNV
+BAMTJVVTRVJUcnVzdCBSU0EgQ2VydGlmaWNhdGlvbiBBdXRob3JpdHkwHhcNMTQx
+MDA2MDAwMDAwWhcNMjQxMDA1MjM1OTU5WjB2MQswCQYDVQQGEwJVUzELMAkGA1UE
+CBMCTUkxEjAQBgNVBAcTCUFubiBBcmJvcjESMBAGA1UEChMJSW50ZXJuZXQyMREw
+DwYDVQQLEwhJbkNvbW1vbjEfMB0GA1UEAxMWSW5Db21tb24gUlNBIFNlcnZlciBD
+QTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAJwb8bsvf2MYFVFRVA+e
+xU5NEFj6MJsXKZDmMwysE1N8VJG06thum4ltuzM+j9INpun5uukNDBqeso7JcC7v
+HgV9lestjaKpTbOc5/MZNrun8XzmCB5hJ0R6lvSoNNviQsil2zfVtefkQnI/tBPP
+iwckRR6MkYNGuQmm/BijBgLsNI0yZpUn6uGX6Ns1oytW61fo8BBZ321wDGZq0GTl
+qKOYMa0dYtX6kuOaQ80tNfvZnjNbRX3EhigsZhLI2w8ZMA0/6fDqSl5AB8f2IHpT
+eIFken5FahZv9JNYyWL7KSd9oX8hzudPR9aKVuDjZvjs3YncJowZaDuNi+L7RyML
+fzcCAwEAAaOCAW4wggFqMB8GA1UdIwQYMBaAFFN5v1qqK0rPVIDh2JvAnfKyA2bL
+MB0GA1UdDgQWBBQeBaN3j2yW4luHS6a0hqxxAAznODAOBgNVHQ8BAf8EBAMCAYYw
+EgYDVR0TAQH/BAgwBgEB/wIBADAdBgNVHSUEFjAUBggrBgEFBQcDAQYIKwYBBQUH
+AwIwGwYDVR0gBBQwEjAGBgRVHSAAMAgGBmeBDAECAjBQBgNVHR8ESTBHMEWgQ6BB
+hj9odHRwOi8vY3JsLnVzZXJ0cnVzdC5jb20vVVNFUlRydXN0UlNBQ2VydGlmaWNh
+dGlvbkF1dGhvcml0eS5jcmwwdgYIKwYBBQUHAQEEajBoMD8GCCsGAQUFBzAChjNo
+dHRwOi8vY3J0LnVzZXJ0cnVzdC5jb20vVVNFUlRydXN0UlNBQWRkVHJ1c3RDQS5j
+cnQwJQYIKwYBBQUHMAGGGWh0dHA6Ly9vY3NwLnVzZXJ0cnVzdC5jb20wDQYJKoZI
+hvcNAQEMBQADggIBAC0RBjjW29dYaK+qOGcXjeIT16MUJNkGE+vrkS/fT2ctyNMU
+11ZlUp5uH5gIjppIG8GLWZqjV5vbhvhZQPwZsHURKsISNrqOcooGTie3jVgU0W+0
++Wj8mN2knCVANt69F2YrA394gbGAdJ5fOrQmL2pIhDY0jqco74fzYefbZ/VS29fR
+5jBxu4uj1P+5ZImem4Gbj1e4ZEzVBhmO55GFfBjRidj26h1oFBHZ7heDH1Bjzw72
+hipu47Gkyfr2NEx3KoCGMLCj3Btx7ASn5Ji8FoU+hCazwOU1VX55mKPU1I2250Lo
+RCASN18JyfsD5PVldJbtyrmz9gn/TKbRXTr80U2q5JhyvjhLf4lOJo/UzL5WCXED
+Smyj4jWG3R7Z8TED9xNNCxGBMXnMete+3PvzdhssvbORDwBZByogQ9xL2LUZFI/i
+eoQp0UM/L8zfP527vWjEzuDN5xwxMnhi+vCToh7J159o5ah29mP+aJnvujbXEnGa
+nrNxHzu+AGOePV8hwrGGG7hOIcPDQwkuYwzN/xT29iLp/cqf9ZhEtkGcQcIImH3b
+oJ8ifsCnSbu0GB9L06Yqh7lcyvKDTEADslIaeSEINxhO2Y1fmcYFX/Fqrrp1WnhH
+OjplXuXE0OPa0utaKC25Aplgom88L2Z8mEWcyfoB7zKOfD759AN7JKZWCYwk
+-----END CERTIFICATE-----
+)EOF";
+
+// OpenWeather variableshp?cmd=login&mac=0c:9a:3c:
+// https://api.openweathermap.org/data/2.5/weather?zip=48105,us&APPID=e864cdc459bbf610e070dcd11bf116f8
+unsigned long lastTimeHTTP = 0;
+unsigned long timerDelayHTTP = 10000;
+String jsonBuffer;
 
 // helps declaration
 void printValues();
 void showBMEReadings(float temp, float humidity);
 void LEDIndicator(float temp, float humidity);
+void openWeather();
+String httpGETRequest(const char* serverName);
 
 //////////////////////////////////////////////////
 /////     Main code
@@ -32,34 +87,60 @@ void LEDIndicator(float temp, float humidity);
 
 void setup() {
     Serial.begin(115200);
+
+    // setup for bme
     bool bme_status;
-    // default settings
     bme_status = bme.begin(0x76);  
     if (!bme_status) {
-    Serial.println("Could not find a valid BME280 sensor, check wiring!");
-    while (1);
+        Serial.println("Could not find a valid BME280 sensor, check wiring!");
+        while (1);
     }
 
+    // setup for display
     if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) { // Address 0x3D for 128x64
-    Serial.println(F("SSD1306 allocation failed"));
-    for(;;);
+        Serial.println(F("SSD1306 allocation failed"));
+        for(;;);
     }
-    delay(2000);
     display.clearDisplay();
     display.setTextColor(WHITE);
 
+    // setup for LED
     pinMode(LED_PIN_R, OUTPUT);
     pinMode(LED_PIN_G, OUTPUT);
 
+    // setup for wifi
+    WiFi.disconnect(true); //disconnect form wifi to set new wifi connection
+    WiFi.mode(WIFI_STA);   //init wifi mode
+    Serial.println("Connecting");
+    Serial.print("MAC >> ");
+    Serial.println(WiFi.macAddress());
+    Serial.printf("Connecting to WiFi: %s ", ssid);
+    esp_wifi_sta_wpa2_ent_set_ca_cert((uint8_t *)incommon_ca, strlen(incommon_ca) + 1);
+    esp_wifi_sta_wpa2_ent_set_identity((uint8_t *)EAP_IDENTITY, strlen(EAP_IDENTITY));
+    esp_wifi_sta_wpa2_ent_set_username((uint8_t *)EAP_IDENTITY, strlen(EAP_IDENTITY));
+    esp_wifi_sta_wpa2_ent_set_password((uint8_t *)EAP_PASSWORD, strlen(EAP_PASSWORD));
+    esp_wifi_sta_wpa2_ent_enable();
+    WiFi.begin(ssid);
+    while (WiFi.status() != WL_CONNECTED) {
+        digitalWrite(LED_PIN_R, HIGH);
+        delay(500);     
+        digitalWrite(LED_PIN_R, LOW);
+        delay(500);    
+    }
+    WiFi.setAutoReconnect(true);
+    WiFi.persistent(true);
 }
 
 void loop() { 
-    // printValues();
     delay(2000);
+    // Connected to WiFi network with IP Address: 35.3.168.248
+    Serial.print("Connected to WiFi network with IP Address: ");
+    Serial.println(WiFi.localIP());
     float temp = bme.readTemperature();
     float humidity = bme.readHumidity();
-    showBMEReadings(temp, humidity);
+    // showBMEReadings(temp, humidity);
     LEDIndicator(temp, humidity);
+    openWeather();
 }
 
 //////////////////////////////////////////////////
@@ -98,15 +179,89 @@ void showBMEReadings(float temp, float humidity){
 
 void LEDIndicator(float temp, float humidity){
     if (temp > 30 || humidity < 30){
-        digitalWrite(LED_PIN_R, HIGH); // on
-        delay(500);            
-        digitalWrite(LED_PIN_R, LOW);  // off
+        digitalWrite(LED_PIN_R, HIGH); 
         digitalWrite(LED_PIN_G, LOW);
-        delay(500);     
+        delay(500);            
     } else {
         digitalWrite(LED_PIN_G, HIGH);
+        digitalWrite(LED_PIN_R, LOW); 
         delay(500);  
     }
+}
+
+void openWeather() {
+    if ((millis() - lastTimeHTTP) > timerDelayHTTP){
+        if(WiFi.status()== WL_CONNECTED){
+            String serverPath = "http://api.openweathermap.org/data/2.5/weather?zip=48105,us&APPID=e864cdc459bbf610e070dcd11bf116f8";
+            jsonBuffer = httpGETRequest(serverPath.c_str());
+            // Serial.println("jsonBuffer");
+            // Serial.println(jsonBuffer);
+            JSONVar myObject = JSON.parse(jsonBuffer);      
+            // JSON.typeof(jsonVar) can be used to get the type of the var
+            if (JSON.typeof(myObject) == "undefined") {
+                Serial.println("Parsing input failed!");
+                return;
+            }
+            // clear display
+            display.clearDisplay();
+            // display the title
+            display.setCursor(0, 0); //cursor(x, y)
+            display.setTextSize(1.9);
+            display.setCursor(0, 5);
+            display.println("Temp in 3 hours");
+
+            display.setTextSize(1);
+            display.setCursor(0, 20);
+            display.print("Cur Temp: ");
+            display.print((double) myObject["main"]["temp"]- 273.15);
+            display.print(" C");
+
+            display.setTextSize(1);
+            display.setCursor(0, 35);
+            display.print("Min Temp: ");
+            display.print((double) myObject["main"]["temp_min"]- 273.15);
+            display.print(" C");
+            
+            display.setTextSize(1);
+            display.setCursor(0, 50);
+            display.print("Max Temp: ");
+            display.print((double) myObject["main"]["temp_max"]- 273.15);
+            display.print(" C"); 
+            
+            display.display(); 
+        }
+        else {
+            Serial.println("WiFi Disconnected");
+        }
+        lastTimeHTTP = millis();
+    }
+}
+
+String httpGETRequest(const char* serverName) {
+  WiFiClient client;
+  HTTPClient http;
+    
+  // Your Domain name with URL path or IP address with path
+  http.begin(client, serverName);
+  
+  // Send HTTP POST request
+  int httpResponseCode = http.GET();
+  
+  String payload = "{}"; 
+  
+  if (httpResponseCode>0) {
+    Serial.print("HTTP Response code: ");
+    Serial.println(httpResponseCode);
+    payload = http.getString();
+  }
+  else {
+    Serial.print("Error code: ");
+    Serial.println(httpResponseCode);
+  }
+  // Free resources
+  http.end();
+
+  return payload;
 }
 
 void printValues() {
