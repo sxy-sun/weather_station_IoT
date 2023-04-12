@@ -10,6 +10,10 @@
 #include <HTTPClient.h>
 #include <Arduino_JSON.h>
 
+// open weather variables
+double temp = -100;
+double temp_min = -100;
+double temp_max = -100;
 
 // BME280 variables
 #define SEALEVELPRESSURE_HPA (1026.4) // sea level pressure at ann arbor
@@ -21,6 +25,9 @@ Adafruit_BME280 bme; // I2C
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 
 // Button variable
+#define BUTTON_PIN 4
+bool showBME;
+bool showWeather;
 
 // LED variables
 #define LED_PIN_R 2
@@ -30,6 +37,7 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 const char *ssid = "eduroam"; // Eduroam // MWireless seized all 2.4GHz SSID on 2/25/2020
 #define EAP_IDENTITY "username@umich.edu" //enter full umich email address
 #define EAP_PASSWORD "umich_password"     //your umich password
+   
 
 static const char incommon_ca[] PROGMEM = R"EOF(
 -----BEGIN CERTIFICATE-----
@@ -76,7 +84,7 @@ String jsonBuffer;
 
 // helps declaration
 void printValues();
-void showBMEReadings(float temp, float humidity);
+void showBMEReadings(float temp, float humidity, bool showBME);
 void LEDIndicator(float temp, float humidity);
 void openWeather();
 String httpGETRequest(const char* serverName);
@@ -95,6 +103,8 @@ void setup() {
         Serial.println("Could not find a valid BME280 sensor, check wiring!");
         while (1);
     }
+    // set up for button
+    pinMode(BUTTON_PIN, INPUT_PULLUP);
 
     // setup for display
     if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) { // Address 0x3D for 128x64
@@ -103,6 +113,8 @@ void setup() {
     }
     display.clearDisplay();
     display.setTextColor(WHITE);
+    showBME = true;
+    showWeather = false;
 
     // setup for LED
     pinMode(LED_PIN_R, OUTPUT);
@@ -132,60 +144,100 @@ void setup() {
 }
 
 void loop() { 
-    delay(2000);
     // Connected to WiFi network with IP Address: 35.3.168.248
-    Serial.print("Connected to WiFi network with IP Address: ");
-    Serial.println(WiFi.localIP());
+    // Serial.print("Connected to WiFi network with IP Address: ");
+    // Serial.println(WiFi.localIP());
+    delay(500);
+    int currentState = digitalRead(BUTTON_PIN);
+    if (currentState == LOW && showBME == false) {
+        Serial.println("pressed! BME your turn!");
+        showBME = true;
+        showWeather = false;
+    } else if (currentState == LOW && showBME == true) {
+        Serial.println("pressed! Weather your turn!");
+        showBME = false;
+        showWeather = true;
+    }
     float temp = bme.readTemperature();
     float humidity = bme.readHumidity();
-    // showBMEReadings(temp, humidity);
+    showBMEReadings(temp, humidity, showBME);
     LEDIndicator(temp, humidity);
     openWeather();
+
+    if (showWeather) {
+        display.clearDisplay();
+        // display the title
+        display.setCursor(0, 0); //cursor(x, y)
+        display.setTextSize(1.9);
+        display.setCursor(0, 5);
+        display.println("Temp in 3 hours");
+
+        display.setTextSize(1);
+        display.setCursor(0, 20);
+        display.print("Cur Temp: ");
+        display.print(temp);
+        display.print(" C");
+
+        display.setTextSize(1);
+        display.setCursor(0, 35);
+        display.print("Min Temp: ");
+        display.print(temp_min);
+        display.print(" C");
+        
+        display.setTextSize(1);
+        display.setCursor(0, 50);
+        display.print("Max Temp: ");
+        display.print(temp_max);
+        display.print(" C"); 
+        
+        display.display(); 
+    }
 }
 
 //////////////////////////////////////////////////
 /////     HELPERS
 //////////////////////////////////////////////////
-void showBMEReadings(float temp, float humidity){
+void showBMEReadings(float temp, float humidity, bool showBME){
   // clear display
-    display.clearDisplay();
-    // display the title
-    display.setCursor(0, 0); //cursor(x, y)
-    display.setTextSize(1.9);
-    display.println("Monitoring...");
+    if (showBME){
+        delay(500);
+        display.clearDisplay();
+        // display the title
+        display.setCursor(0, 0); //cursor(x, y)
+        display.setTextSize(1.9);
+        display.println("Monitoring...");
 
-    // display temperature
-    display.setTextSize(1);
-    display.setCursor(0, 17);
-    display.print("Temp: ");
-    display.setTextSize(2);
-    display.setCursor(35 ,17);
-    display.print(temp);
-    display.print(" C");
-    
-    // display humidity
-    display.setTextSize(1);
-    display.setCursor(0, 40);
-    display.print("Humi");
-    display.setCursor(0, 50);
-    display.print("dity:");
-    display.setTextSize(2);
-    display.setCursor(35, 45);
-    display.print(humidity);
-    display.print(" %"); 
-    
-    display.display(); 
+        // display temperature
+        display.setTextSize(1);
+        display.setCursor(0, 17);
+        display.print("Temp: ");
+        display.setTextSize(2);
+        display.setCursor(35 ,17);
+        display.print(temp);
+        display.print(" C");
+
+        // display humidity
+        display.setTextSize(1);
+        display.setCursor(0, 40);
+        display.print("Humi");
+        display.setCursor(0, 50);
+        display.print("dity:");
+        display.setTextSize(2);
+        display.setCursor(35, 45);
+        display.print(humidity);
+        display.print(" %"); 
+
+        display.display(); 
+    }
 }
 
 void LEDIndicator(float temp, float humidity){
     if (temp > 30 || humidity < 30){
         digitalWrite(LED_PIN_R, HIGH); 
         digitalWrite(LED_PIN_G, LOW);
-        delay(500);            
     } else {
         digitalWrite(LED_PIN_G, HIGH);
         digitalWrite(LED_PIN_R, LOW); 
-        delay(500);  
     }
 }
 
@@ -202,33 +254,9 @@ void openWeather() {
                 Serial.println("Parsing input failed!");
                 return;
             }
-            // clear display
-            display.clearDisplay();
-            // display the title
-            display.setCursor(0, 0); //cursor(x, y)
-            display.setTextSize(1.9);
-            display.setCursor(0, 5);
-            display.println("Temp in 3 hours");
-
-            display.setTextSize(1);
-            display.setCursor(0, 20);
-            display.print("Cur Temp: ");
-            display.print((double) myObject["main"]["temp"]- 273.15);
-            display.print(" C");
-
-            display.setTextSize(1);
-            display.setCursor(0, 35);
-            display.print("Min Temp: ");
-            display.print((double) myObject["main"]["temp_min"]- 273.15);
-            display.print(" C");
-            
-            display.setTextSize(1);
-            display.setCursor(0, 50);
-            display.print("Max Temp: ");
-            display.print((double) myObject["main"]["temp_max"]- 273.15);
-            display.print(" C"); 
-            
-            display.display(); 
+            temp = (double) myObject["main"]["temp"]- 273.15;
+            temp_min = (double) myObject["main"]["temp_min"]- 273.15;
+            temp_max = (double) myObject["main"]["temp_max"]- 273.15;
         }
         else {
             Serial.println("WiFi Disconnected");
