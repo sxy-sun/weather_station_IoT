@@ -11,6 +11,8 @@
 #include <Arduino_JSON.h>
 
 // open weather variables
+String serverPath = "http://api.openweathermap.org/data/2.5/weather?zip=48105,us&APPID=yourOpenWeatherToken";
+
 double temp = -100;
 double temp_min = -100;
 double temp_max = -100;
@@ -37,7 +39,7 @@ bool showWeather;
 const char *ssid = "eduroam"; // Eduroam // MWireless seized all 2.4GHz SSID on 2/25/2020
 #define EAP_IDENTITY "username@umich.edu" //enter full umich email address
 #define EAP_PASSWORD "umich_password"     //your umich password
-   
+
 
 static const char incommon_ca[] PROGMEM = R"EOF(
 -----BEGIN CERTIFICATE-----
@@ -79,7 +81,7 @@ OjplXuXE0OPa0utaKC25Aplgom88L2Z8mEWcyfoB7zKOfD759AN7JKZWCYwk
 // OpenWeather variableshp?cmd=login&mac=0c:9a:3c:
 // https://api.openweathermap.org/data/2.5/weather?zip=48105,us&APPID=e864cdc459bbf610e070dcd11bf116f8
 unsigned long lastTimeHTTP = 0;
-unsigned long timerDelayHTTP = 10000;
+unsigned long timerDelayHTTP = 120000;
 String jsonBuffer;
 
 // helps declaration
@@ -244,7 +246,6 @@ void LEDIndicator(float temp, float humidity){
 void openWeather() {
     if ((millis() - lastTimeHTTP) > timerDelayHTTP){
         if(WiFi.status()== WL_CONNECTED){
-            String serverPath = "http://api.openweathermap.org/data/2.5/weather?zip=48105,us&APPID=e864cdc459bbf610e070dcd11bf116f8";
             jsonBuffer = httpGETRequest(serverPath.c_str());
             // Serial.println("jsonBuffer");
             // Serial.println(jsonBuffer);
