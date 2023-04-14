@@ -10,12 +10,22 @@
 #include <HTTPClient.h>
 #include <Arduino_JSON.h>
 
-// open weather variables
-String serverPath = "http://api.openweathermap.org/data/2.5/weather?zip=48105,us&APPID=yourOpenWeatherToken";
+// SECRET
 
-double temp = -100;
-double temp_min = -100;
-double temp_max = -100;
+
+// open weather variables
+// String openWeatherAPI = "http://api.openweathermap.org/data/2.5/weather?zip=48105,us&APPID=yourOpenWeatherToken";
+double local_temp = -100;
+double local_temp_min = -100;
+double local_temp_max = -100;
+unsigned long lastTimeHTTP = 0;
+// unsigned long timerDelayHTTP = 120000;
+unsigned long timerDelayHTTP = 10000;
+String jsonBuffer;
+
+// IFTTT variables 
+const char* IFTTT_host = "maker.ifttt.com";
+// const char* IFTTT_apikey = "Your IFTTT api key";
 
 // BME280 variables
 #define SEALEVELPRESSURE_HPA (1026.4) // sea level pressure at ann arbor
@@ -33,12 +43,12 @@ bool showWeather;
 
 // LED variables
 #define LED_PIN_R 2
-#define LED_PIN_G 15
+#define LED_PIN_G 13
 
 // wifi setup
 const char *ssid = "eduroam"; // Eduroam // MWireless seized all 2.4GHz SSID on 2/25/2020
-#define EAP_IDENTITY "username@umich.edu" //enter full umich email address
-#define EAP_PASSWORD "umich_password"     //your umich password
+// #define EAP_IDENTITY "username@umich.edu" //enter full umich email address
+// #define EAP_PASSWORD "umich_password"     //your umich password
 
 
 static const char incommon_ca[] PROGMEM = R"EOF(
@@ -77,12 +87,6 @@ oJ8ifsCnSbu0GB9L06Yqh7lcyvKDTEADslIaeSEINxhO2Y1fmcYFX/Fqrrp1WnhH
 OjplXuXE0OPa0utaKC25Aplgom88L2Z8mEWcyfoB7zKOfD759AN7JKZWCYwk
 -----END CERTIFICATE-----
 )EOF";
-
-// OpenWeather variableshp?cmd=login&mac=0c:9a:3c:
-// https://api.openweathermap.org/data/2.5/weather?zip=48105,us&APPID=e864cdc459bbf610e070dcd11bf116f8
-unsigned long lastTimeHTTP = 0;
-unsigned long timerDelayHTTP = 120000;
-String jsonBuffer;
 
 // helps declaration
 void printValues();
@@ -140,15 +144,15 @@ void setup() {
         delay(500);     
         digitalWrite(LED_PIN_R, LOW);
         delay(500);    
+        Serial.printf(".");
     }
+    Serial.println("Connected to WiFi network with IP Address: ");
+    Serial.print(WiFi.localIP());
     WiFi.setAutoReconnect(true);
     WiFi.persistent(true);
 }
 
 void loop() { 
-    // Connected to WiFi network with IP Address: 35.3.168.248
-    // Serial.print("Connected to WiFi network with IP Address: ");
-    // Serial.println(WiFi.localIP());
     delay(500);
     int currentState = digitalRead(BUTTON_PIN);
     if (currentState == LOW && showBME == false) {
@@ -177,19 +181,19 @@ void loop() {
         display.setTextSize(1);
         display.setCursor(0, 20);
         display.print("Cur Temp: ");
-        display.print(temp);
+        display.print(local_temp);
         display.print(" C");
 
         display.setTextSize(1);
         display.setCursor(0, 35);
         display.print("Min Temp: ");
-        display.print(temp_min);
+        display.print(local_temp_min);
         display.print(" C");
         
         display.setTextSize(1);
         display.setCursor(0, 50);
         display.print("Max Temp: ");
-        display.print(temp_max);
+        display.print(local_temp_max);
         display.print(" C"); 
         
         display.display(); 
@@ -234,19 +238,19 @@ void showBMEReadings(float temp, float humidity, bool showBME){
 }
 
 void LEDIndicator(float temp, float humidity){
-    if (temp > 30 || humidity < 30){
+    if (temp > 30 || humidity < 40){
         digitalWrite(LED_PIN_R, HIGH); 
         digitalWrite(LED_PIN_G, LOW);
     } else {
         digitalWrite(LED_PIN_G, HIGH);
-        digitalWrite(LED_PIN_R, LOW); 
+        digitalWrite(LED_PIN_R, LOW);         
     }
 }
 
 void openWeather() {
     if ((millis() - lastTimeHTTP) > timerDelayHTTP){
         if(WiFi.status()== WL_CONNECTED){
-            jsonBuffer = httpGETRequest(serverPath.c_str());
+            jsonBuffer = httpGETRequest(openWeatherAPI.c_str());
             // Serial.println("jsonBuffer");
             // Serial.println(jsonBuffer);
             JSONVar myObject = JSON.parse(jsonBuffer);      
@@ -255,9 +259,9 @@ void openWeather() {
                 Serial.println("Parsing input failed!");
                 return;
             }
-            temp = (double) myObject["main"]["temp"]- 273.15;
-            temp_min = (double) myObject["main"]["temp_min"]- 273.15;
-            temp_max = (double) myObject["main"]["temp_max"]- 273.15;
+            local_temp = (double) myObject["main"]["temp"]- 273.15;
+            local_temp_min = (double) myObject["main"]["temp_min"]- 273.15;
+            local_temp_max = (double) myObject["main"]["temp_max"]- 273.15;
         }
         else {
             Serial.println("WiFi Disconnected");
