@@ -19,13 +19,17 @@ double local_temp = -100;
 double local_temp_min = -100;
 double local_temp_max = -100;
 unsigned long lastTimeHTTP = 0;
-// unsigned long timerDelayHTTP = 120000;
-unsigned long timerDelayHTTP = 10000;
+unsigned long timerDelayHTTP = 20000;
+// unsigned long timerDelayHTTP = 10000;
 String jsonBuffer;
 
 // IFTTT variables 
 const char* IFTTT_host = "maker.ifttt.com";
 // const char* IFTTT_apikey = "Your IFTTT api key";
+unsigned long lastTimeIFTTT = 0;
+// unsigned long timerDelayIFTTT = 3600000;
+unsigned long timerDelayIFTTT = 30000;
+
 
 // BME280 variables
 #define SEALEVELPRESSURE_HPA (1026.4) // sea level pressure at ann arbor
@@ -43,7 +47,7 @@ bool showWeather;
 
 // LED variables
 #define LED_PIN_R 2
-#define LED_PIN_G 13
+#define LED_PIN_G 12
 
 // wifi setup
 const char *ssid = "eduroam"; // Eduroam // MWireless seized all 2.4GHz SSID on 2/25/2020
@@ -94,6 +98,7 @@ void showBMEReadings(float temp, float humidity, bool showBME);
 void LEDIndicator(float temp, float humidity);
 void openWeather();
 String httpGETRequest(const char* serverName);
+void IFTTT(float humidity);
 
 //////////////////////////////////////////////////
 /////     Main code
@@ -238,13 +243,48 @@ void showBMEReadings(float temp, float humidity, bool showBME){
 }
 
 void LEDIndicator(float temp, float humidity){
-    if (temp > 30 || humidity < 40){
+    if (humidity < 30 || humidity > 50){
         digitalWrite(LED_PIN_R, HIGH); 
         digitalWrite(LED_PIN_G, LOW);
+        IFTTT(humidity);
     } else {
         digitalWrite(LED_PIN_G, HIGH);
-        digitalWrite(LED_PIN_R, LOW);         
+        digitalWrite(LED_PIN_R, LOW);   
     }
+}
+
+void IFTTT(float humidity) {
+    if ((millis() - lastTimeIFTTT) > timerDelayIFTTT) {
+        Serial.print("humidity: ");
+        Serial.println(humidity);
+
+        WiFiClient client;
+        const int httpPort = 80;
+        if (!client.connect(IFTTT_host, httpPort)) {
+            Serial.println("connection failed");
+            return;
+        }       
+        String slack_url = "/trigger/slack_alert/with/key/";
+        slack_url += IFTTT_apikey;
+        String jsonData;
+        if (humidity < 30) {
+            jsonData = String("{ \"value1\" : \"") + "The humidity is lower than 30 percent, " + "\", \"value2\" :\"" + "stay hydrated!" + "\", \"value3\" : \" \" }";
+        } else {
+            jsonData = String("{ \"value1\" : \"") + "The humidity is above than 50 percent, " + "\", \"value2\" :\"" + "food gets spoiled quickly!" + "\", \"value3\" : \" \" }";
+        }
+        client.print(String("POST ") + slack_url + " HTTP/1.1\r\n" +
+                    "Host: " + IFTTT_host + "\r\n" + 
+                    "Content-Type: application/json\r\n" + 
+                    "Content-Length:" + jsonData.length() + "\r\n\r\n"
+                    + jsonData);
+
+        // String spotify_url = "/trigger/spotify_alert/with/key/";
+        // spotify_url += IFTTT_apikey;
+
+        // client.print(String("POST ") + spotify_url + " HTTP/1.1\r\n" +
+        //             "Host: " + IFTTT_host + "\r\n" );
+        lastTimeIFTTT = millis();
+    } 
 }
 
 void openWeather() {
