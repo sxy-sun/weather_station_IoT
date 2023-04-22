@@ -1,7 +1,7 @@
 # IoT weather station with ESP32
 
 This IoT project can retrieve local weather from the internet 
-while detecting room temperature and humidity and display two sets of readings on an OLED display. More information about implementation can be found [here]().
+while detecting room temperature and humidity and display two sets of readings on an OLED display. More information about implementation can be found [here](https://sxy-sun.github.io/posts/iot-weather-station-with-esp32/).
 
 ## How to use
 This project is precisely feasible with Umich on-campus wifi, and users can seamlessly
